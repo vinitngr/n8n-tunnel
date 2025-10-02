@@ -26,7 +26,30 @@ check_cloudflared() {
     fi
 }
 
+if uname | grep -iq "linux"; then
+    echo "running on WSL | Linux"
+    DOCKER_DESKTOP="/mnt/c/Program Files/Docker/Docker/Docker Desktop.exe"
+else
+    echo "running on Window | MinGW"
+    DOCKER_DESKTOP="C:/Program Files/Docker/Docker/Docker Desktop.exe"
+fi
+
+start_docker_if_needed() {
+    docker info >/dev/null 2>&1
+    if [ $? -ne 0 ]; then
+        echo "Docker not running, starting Docker Desktop..."
+        nohup "$DOCKER_DESKTOP" >/dev/null 2>&1 &
+        echo "Waiting for Docker daemon..."
+        while ! docker info >/dev/null 2>&1; do
+            sleep 2
+        done
+        echo "Docker is ready."
+    fi
+}
+
 start_n8n_container() {
+    start_docker_if_needed
+
     if ! docker ps -a --format "{{.Names}}" | grep -wq "n8n"; then
         echo "Running n8n container..."
         docker run -d -p 5678:5678 \
@@ -39,9 +62,16 @@ start_n8n_container() {
         docker start n8n >/dev/null
     fi
 
+
     docker logs -f n8n 2>/dev/null | awk -v prefix="===== DOCKER ===== " -v max=90 \
     '{ line = $0; if (length(line) > max) { line = substr(line,1,max) " ..." } print prefix line }' &
     docker_pid=$!
+
+   echo "Waiting for n8n to be ready..."
+    until curl -s -o /dev/null http://localhost:5678/; do
+        sleep 2
+    done
+    echo "n8n is ready."
 }
 
 start_cloudflared_tunnel() {
