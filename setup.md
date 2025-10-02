@@ -87,3 +87,7 @@ sudo dpkg -i cloudflared-linux-amd64.deb
 * **Temporary tunnel**:
     `cloudflared tunnel --url http://localhost:5678`
     This provides a temporary URL (e.g., `abcd1234.trycloudflare.com`) for quick testing without a custom domain.
+
+
+
+curl -fsSL https://raw.githubusercontent.com/vinitngr/n8n-tunnel/main/runn8n.sh | bash
