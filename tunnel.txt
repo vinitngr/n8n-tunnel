@@ -3,6 +3,6 @@ cloudflared tunnel run --protocol http2 n8n-tunnel
 
 
 - fixed the issue of tunnel not connecting with quic connection 
-  - may be adding rule and later removing them helped , - rule in firebase to all udp connection of 7xxx and 443 port , which rule i later deleted still worked
+  - may be adding rule and later removing them helped , - rule in firewall to let all udp outgoing connection of 7xxx and 443 port , which rule i later deleted still worked
   - or may be i allowed and then block again the host process from glasswire
   - or may be i closed the warp connection , cloudflare warp
