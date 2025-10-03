@@ -7,6 +7,26 @@ This guide helps you set up n8n using a Cloudflare Tunnel for secure remote acce
 - [Cloudflared CLI](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation/)
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 
+## Quick Start
+
+1. **Run setup directly via curl:**
+
+```bash
+# Run full setup including glue code
+curl -fsSL https://raw.githubusercontent.com/vinitngr/n8n-tunnel/refs/heads/main/setup.sh | bash
+
+# OR run setup without glue runN8N generation
+curl -fsSL https://raw.githubusercontent.com/vinitngr/n8n-tunnel/refs/heads/main/setup.sh | bash -s -- --noglue
+```
+or
+```bash
+curl -fsSL -o setup.sh https://raw.githubusercontent.com/vinitngr/n8n-tunnel/refs/heads/main/setup.sh
+chmod +x setup.sh
+
+./setup.sh #or
+./setup.sh --noglue
+```
+
 ## Configuration Notes
 - Falls back to HTTP/2 if QUIC protocol fails
 - Works on both MinGW and WSL Linux environments

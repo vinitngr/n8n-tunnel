@@ -36,9 +36,20 @@ ensure_logged_in() {
 }
 
 create_tunnel() {
-  read -r -p "Enter the subdomain you want to use (e.g., n8n): " SUBDOMAIN
-  read -r -p "Enter your domain (e.g., vinitngr.xyz): " DOMAIN
-  read -r -p "Enter local service port (e.g., 3000): " LOCAL_PORT
+  read -r -p "Enter the subdomain you want to use (default: n8n): " SUBDOMAIN
+  SUBDOMAIN=${SUBDOMAIN:-n8n}
+
+  while true; do
+  read -r -p "Enter your domain: " DOMAIN
+    if [[ -n "$DOMAIN" ]]; then
+      break
+    else
+      echo "Error: Domain is required. Please enter a value."
+    fi
+  done
+  
+  read -r -p "Enter local service port (default: 5678): " LOCAL_PORT
+  LOCAL_PORT=${LOCAL_PORT:-5678}
 
   FULL_DOMAIN="${SUBDOMAIN}.${DOMAIN}"
   TUNNEL_NAME="${SUBDOMAIN}_tunnel"
@@ -98,9 +109,9 @@ EOF
 
 creatingRunN8n(){
   mkdir -p "$HOME/.cloudflared"
-  TARGET="$HOME/.cloudflared/run_$TUNNEL_NAME.sh"
+  TARGET="$HOME/.cloudflared/runN8N.sh"
  
-  cat > "$TARGET" << 'EOF'
+  cat > "$TARGET" << EOF
 #!/bin/bash
 
 set -e
@@ -115,27 +126,30 @@ check_docker() {
     fi
 }
 
-if uname -s | grep -iq "linux"; then
+if uname | grep -iq "linux"; then
     echo "running on WSL | Linux"
     DOCKER_DESKTOP="/mnt/c/Program Files/Docker/Docker/Docker Desktop.exe"
 else
-    echo "running on Windows | MinGW"
-    DOCKER_DESKTOP="/c/Program Files/Docker/Docker/Docker Desktop.exe"
+    echo "running on Window | MinGW"
+    DOCKER_DESKTOP="C:/Program Files/Docker/Docker/Docker Desktop.exe"
 fi
 
 start_docker_if_needed() {
-    docker info >/dev/null 2>&1 || {
+    docker info >/dev/null 2>&1
+    if [ \$? -ne 0 ]; then
         echo "Docker not running, starting Docker Desktop..."
         nohup "\$DOCKER_DESKTOP" >/dev/null 2>&1 &
-        sleep 3
         echo "Waiting for Docker daemon..."
-        until docker info >/dev/null 2>&1; do sleep 2; done
+        while ! docker info >/dev/null 2>&1; do
+            sleep 2
+        done
         echo "Docker is ready."
-    }
+    fi
 }
 
 start_n8n_container() {
     start_docker_if_needed
+
     if ! docker ps -a --format "{{.Names}}" | grep -wq "n8n"; then
         echo "Running n8n container..."
         docker run -d -p 5678:5678 \
@@ -148,35 +162,40 @@ start_n8n_container() {
         docker start n8n >/dev/null
     fi
 
+
     docker logs -f n8n 2>/dev/null | awk -v prefix="===== DOCKER ===== " -v max=90 \
     '{ line = \$0; if (length(line) > max) { line = substr(line,1,max) " ..." } print prefix line }' &
     docker_pid=\$!
 
-    echo "Waiting for n8n to be ready..."
-    until curl -s -o /dev/null http://localhost:5678/; do sleep 2; done
+   echo "Waiting for n8n to be ready..."
+    until curl -s -o /dev/null http://localhost:5678/; do
+        sleep 2
+    done
     echo "n8n is ready."
 }
 
+
 start_cloudflared_tunnel() {
-    cloudflared tunnel run --config "$CONFIG_PATH" "$TUNNEL_NAME" 2>&1 | awk -v prefix="----- TUNNEL ----- " -v max=80 \
-    '{ line = \$0; if (length(line) > max) { line = substr(line,1,max) " ..." } print prefix line }' &
-    tunnel_pid=\$!
+    cloudflared tunnel --config "$CONFIG_PATH" run "$TUNNEL_NAME" 2>&1 | \
+    awk -v prefix="----- TUNNEL ----- " -v max=80 \
+    '{ line = $0; if (length(line) > max) { line = substr(line,1,max) " ..." } print prefix line }' &
+    tunnel_pid=$!
 }
 
 wait_for_tunnel() {
     local ready=false
     for i in {1..20}; do
         if curl -s -o /dev/null -w "%{http_code}" https://$FULL_DOMAIN | grep -q "200"; then
-            echo "
-/-------------------------------\\
-|                                 |
-| https://$FULL_DOMAIN
-|                                 |
-\\-------------------------------/"
+            echo "╭───────────────────────────────────────────────╮"
+            echo "│                                               │"
+            echo "│        Your n8n instance is ready at:         │"
+            echo "│         https://$FULL_DOMAIN                  │"
+            echo "│                                               │"
+            echo "╰───────────────────────────────────────────────╯"
+
             ready=true
             break
         fi
-        echo " -------------------------- Waiting for tunnel to be ready... \$i/20 --------------------------"
         sleep 1
     done
 
@@ -188,27 +207,31 @@ wait_for_tunnel() {
     fi
 }
 
+
 cleanup() {
     echo "Exiting script..."
     kill \$docker_pid 2>/dev/null
-    echo "Stopping tunnel... \$tunnel_pid"
+    echo "Stopping tunnel... $tunnel_pid" 
     kill \$tunnel_pid 2>/dev/null
-    echo "Stopping n8n container..."
+    echo "Stopping n8n container... "
     docker stop n8n >/dev/null 2>&1
     exit 0
 }
 
-# Main
+# ------------Main Script------------------
 check_docker
 start_n8n_container
 start_cloudflared_tunnel
 wait_for_tunnel
 
-trap cleanup SIGINT SIGTERM EXIT 
+trap cleanup SIGINT SIGTERM
+# -----------------------------------------
 
 while true; do
     read -r cmd
-    [[ "\$cmd" == "exit" ]] && cleanup
+    if [[ "\$cmd" == "exit" ]]; then
+        cleanup
+    fi
 done
 EOF
 
@@ -231,11 +254,23 @@ debug_variables() {
   echo "==========================="
 }
 
+skip_glue=false
+for arg in "$@"; do
+    if [[ "$arg" == "--noglue" ]]; then
+        skip_glue=true
+        break
+    fi
+done
+
 install_cloudflared_if_missing
 ensure_logged_in
 create_tunnel
-creatingRunN8n
+if $skip_glue; then
+    echo "Skipping creatingRunN8n"
+else
+    creatingRunN8n
+fi
 debug_variables
 
 echo "==============setup completed=================="
-echo "Setup complete ✅. Run '$TARGET' to start n8n with the tunnel."
+echo "Setup complete ✅. Run './$TARGET' to start n8n with the tunnel."

@@ -84,16 +84,16 @@ wait_for_tunnel() {
     local ready=false
     for i in {1..20}; do
         if curl -s -o /dev/null -w "%{http_code}" https://n8n.vinitngr.xyz | grep -q "200"; then
-            echo "
-/-------------------------------\\
-|                               |
-|   https://n8n.vinitngr.xyz    |
-|                               |
-\\-------------------------------/"
+            echo "╭───────────────────────────────────────────────╮"
+            echo "│                                               │"
+            echo "│        Your n8n instance is ready at:         │"
+            echo "│         https://n8n.vinitngr.xyz              │"
+            echo "│                                               │"
+            echo "╰───────────────────────────────────────────────╯"
+
             ready=true
             break
         fi
-        echo " -------------------------- Waiting for tunnel to be ready... $i/20 --------------------------"
         sleep 1
     done
 
@@ -104,6 +104,7 @@ wait_for_tunnel() {
         tunnel_pid=$!
     fi
 }
+
 
 cleanup() {
     echo "Exiting script..."
