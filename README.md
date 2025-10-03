@@ -48,10 +48,9 @@ For more information, visit: https://docs.docker.com/go/wsl2/
 ## Setup Instructions
 setup.md => [setup guide](setup.md).
 
-## Quick Start
-
-You can use the script below for a quick setup:
-
+## also a way ( ⚠️ deprecated)
+- step 1: [setup guide](setup.md). create tunnel , DNS record and all
+- step 2: 
 ```bash
 # download and run 
 curl -fsSL -o runn8n.sh https://raw.githubusercontent.com/vinitngr/n8n-tunnel/main/runn8n.sh
