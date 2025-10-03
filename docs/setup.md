@@ -90,4 +90,4 @@ sudo dpkg -i cloudflared-linux-amd64.deb
 
 
 
-curl -fsSL https://raw.githubusercontent.com/vinitngr/n8n-tunnel/main/runn8n.sh | bash
+curl -fsSL https://raw.githubusercontent.com/vinitngr/n8n-tunnel/main/scripts/runn8n.sh | bash
