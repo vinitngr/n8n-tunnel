@@ -184,7 +184,7 @@ start_cloudflared_tunnel() {
 
 wait_for_tunnel() {
     local ready=false
-    for i in {1..20}; do
+    for i in {1..10}; do
         if curl -s -o /dev/null -w "%{http_code}" https://$FULL_DOMAIN | grep -q "200"; then
             echo "╭───────────────────────────────────────────────╮"
             echo "│                                               │"
@@ -196,7 +196,8 @@ wait_for_tunnel() {
             ready=true
             break
         fi
-        sleep 1
+        echo "Waiting for tunnel to be ready... $i/10"
+        sleep 2
     done
 
     if [ "\$ready" = false ]; then

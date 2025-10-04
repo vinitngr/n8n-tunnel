@@ -30,22 +30,26 @@ if uname | grep -iq "linux"; then
     echo "running on WSL | Linux"
     DOCKER_DESKTOP="/mnt/c/Program Files/Docker/Docker/Docker Desktop.exe"
 else
-    echo "running on Window | MinGW"
+    echo "running on Windows | MinGW"
     DOCKER_DESKTOP="C:/Program Files/Docker/Docker/Docker Desktop.exe"
 fi
 
 start_docker_if_needed() {
     docker info >/dev/null 2>&1
     if [ $? -ne 0 ]; then
-        echo "Docker not running, starting Docker Desktop..."
-        nohup "$DOCKER_DESKTOP" >/dev/null 2>&1 &
-        echo "Waiting for Docker daemon..."
+        echo "===== EVENT ===== Docker not running, starting Docker Desktop..."
+        nohup "$DOCKER_DESKTOP" >/tmp/docker.log 2>&1 &
+        disown
+        tail -f /tmp/docker.log | awk -v prefix="----- DOCKER ----- " '{print prefix $0}' &
+        
+        echo "==== EVENT ==== Waiting for Docker daemon..."
         while ! docker info >/dev/null 2>&1; do
             sleep 2
         done
-        echo "Docker is ready."
+        echo "==== EVENT ==== Docker is ready."
     fi
 }
+
 
 start_n8n_container() {
     start_docker_if_needed
@@ -82,7 +86,7 @@ start_cloudflared_tunnel() {
 
 wait_for_tunnel() {
     local ready=false
-    for i in {1..20}; do
+    for i in {1..10}; do
         if curl -s -o /dev/null -w "%{http_code}" https://n8n.vinitngr.xyz | grep -q "200"; then
             echo "╭───────────────────────────────────────────────╮"
             echo "│                                               │"
@@ -94,7 +98,8 @@ wait_for_tunnel() {
             ready=true
             break
         fi
-        sleep 1
+        echo "Waiting for tunnel to be ready... $i/10"
+        sleep 2
     done
 
     if [ "$ready" = false ]; then
