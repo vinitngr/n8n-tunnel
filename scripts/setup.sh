@@ -71,6 +71,7 @@ create_tunnel() {
   echo "Routing DNS for $FULL_DOMAIN..."
   if ! cloudflared tunnel route dns "$TUNNEL_NAME" "$FULL_DOMAIN"; then
     echo "DNS routing failed. Make sure the domain is in Cloudflare and your account has permissions."
+    exit 1
   fi
 
   CREDS_DIR="$(dirname "$CREDS_FILE")"
@@ -121,16 +122,19 @@ else
     DOCKER_DESKTOP="C:/Program Files/Docker/Docker/Docker Desktop.exe"
 fi
 
+
 start_docker_if_needed() {
     docker info >/dev/null 2>&1
     if [ \$? -ne 0 ]; then
-        echo "Docker not running, starting Docker Desktop..."
+        echo "===== EVENT ===== Docker not running, starting Docker Desktop..."
         nohup "\$DOCKER_DESKTOP" >/dev/null 2>&1 &
-        echo "Waiting for Docker daemon..."
+        disown
+        
+        echo "==== EVENT ==== Waiting for Docker daemon..."
         while ! docker info >/dev/null 2>&1; do
             sleep 2
         done
-        echo "Docker is ready."
+        echo "==== EVENT ==== Docker is ready."
     fi
 }
 
@@ -164,10 +168,10 @@ start_n8n_container() {
 
 start_cloudflared_tunnel() {
     cloudflared tunnel --config "$CONFIG_PATH" run "$TUNNEL_NAME" 2>&1 | \
-    awk -v prefix="----- TUNNEL ----- " -v max=80 \
-    '{ line = $0; if (length(line) > max) { line = substr(line,1,max) " ..." } print prefix line }' &
-    tunnel_pid=$!
+    awk -v prefix="----- TUNNEL ----- " -v max=80 '{ line = \$0; if (length(line) > max) { line = substr(line,1,max) " ..." } print prefix line }' &
+    tunnel_pid=\$!
 }
+
 
 wait_for_tunnel() {
     local ready=false
@@ -183,7 +187,7 @@ wait_for_tunnel() {
             ready=true
             break
         fi
-        echo "Waiting for tunnel to be ready... $i/10"
+        echo "Waiting for tunnel to be ready... \$i/10"
         sleep 2
     done
 
@@ -277,4 +281,4 @@ debug_variables
 
 
 echo "==============setup completed=================="
-echo "Setup complete ✅. Run './$TARGET' to start n8n with the tunnel."
+echo "Setup complete ✅. Run '$TARGET' to start n8n with the tunnel."
