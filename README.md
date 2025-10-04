@@ -12,11 +12,9 @@ This guide helps you set up n8n using a Cloudflare Tunnel for secure remote acce
 1. **Run setup directly via curl:**
 
 ```bash
-# Run full setup including glue code
-curl -fsSL https://raw.githubusercontent.com/vinitngr/n8n-tunnel/refs/heads/main/scripts/setup.sh | bash
+curl -fsSL https://raw.githubusercontent.com/vinitngr/n8n-tunnel/refs/heads/main/scripts/setup.sh | bash -s -- n8n <Domain(example.com)> 5678 
 
-# OR run setup without glue runN8N generation
-curl -fsSL https://raw.githubusercontent.com/vinitngr/n8n-tunnel/refs/heads/main/scripts/setup.sh | bash -s -- --noglue
+curl -fsSL https://raw.githubusercontent.com/vinitngr/n8n-tunnel/refs/heads/main/scripts/setup.sh | bash -s -- n8n <Domain> 5678 --noglue
 ```
 or
 ```bash

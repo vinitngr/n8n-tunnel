@@ -36,20 +36,7 @@ ensure_logged_in() {
 }
 
 create_tunnel() {
-  read -r -p "Enter the subdomain you want to use (default: n8n): " SUBDOMAIN
-  SUBDOMAIN=${SUBDOMAIN:-n8n}
-
-  while true; do
-  read -r -p "Enter your domain: " DOMAIN
-    if [[ -n "$DOMAIN" ]]; then
-      break
-    else
-      echo "Error: Domain is required. Please enter a value."
-    fi
-  done
   
-  read -r -p "Enter local service port (default: 5678): " LOCAL_PORT
-  LOCAL_PORT=${LOCAL_PORT:-5678}
 
   FULL_DOMAIN="${SUBDOMAIN}.${DOMAIN}"
   TUNNEL_NAME="${SUBDOMAIN}_tunnel"
@@ -255,23 +242,39 @@ debug_variables() {
   echo "==========================="
 }
 
-skip_glue=false
-for arg in "$@"; do
-    if [[ "$arg" == "--noglue" ]]; then
-        skip_glue=true
-        break
-    fi
-done
+get_user_input() {
+    skip_glue=false
+    args=()
+    for arg in "$@"; do
+        case "$arg" in
+            --noglue) skip_glue=true ;;
+            *) args+=("$arg") ;;
+        esac
+    done
+
+    SUBDOMAIN="${args[0]}"
+    DOMAIN="${args[1]}"
+    LOCAL_PORT="${args[2]}"
+
+    [ -z "$SUBDOMAIN" ] && read -r -p "Enter the subdomain you want to use (default: n8n): " SUBDOMAIN
+    SUBDOMAIN=${SUBDOMAIN:-n8n}
+
+    while [ -z "$DOMAIN" ]; do
+        read -r -p "Enter your domain: " DOMAIN
+    done
+
+    [ -z "$LOCAL_PORT" ] && read -r -p "Enter local service port (default: 5678): " LOCAL_PORT
+    LOCAL_PORT=${LOCAL_PORT:-5678}
+}
+
 
 install_cloudflared_if_missing
 ensure_logged_in
+get_user_input "$@"
 create_tunnel
-if $skip_glue; then
-    echo "Skipping creatingRunN8n"
-else
-    creatingRunN8n
-fi
+[ "$skip_glue" = true ] && echo "Skipping creatingRunN8n" || creatingRunN8n
 debug_variables
+
 
 echo "==============setup completed=================="
 echo "Setup complete ✅. Run './$TARGET' to start n8n with the tunnel."
