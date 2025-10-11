@@ -1,0 +1,50 @@
+cloudflare tunnel setup = for n8n 
+
+
+- install n8n image fron docker
+- spin up a container from this image 
+
+
+- now you have n8n running on localhost 
+- for webhooks kind of thing you need internet exposure
+- to tackle this situation we use cloudflare tunnel , or ngrok or something similar 
+- but the url is temp and not consistent
+- for that cluodflare tunnel provide a consistent tunneling with specified ip we have to connect with our domain to have access
+
+
+process - 
+docker 
+- docker run -it --name n8n -p 5678:5678 -v n8n_data:/home/node/.n8n n8nio/n8n
+- docker stop n8n
+- docker start -ai n8n
+
+cloudflare tunnel 
+ -> 
+ -> cloudflared login
+ -> cloudflared tunnel -url localhost:3000 : (for temp url)
+ -> cloudflared tunnel create n8n_tunnel  : you will get a credential file stored in .cloudflared/hash.json
+ -> create a config.yml in .cloudflared/config.yml
+ -> vinit@PC-vinit:~$ cat .cloudflared/config.yml
+            	tunnel: c0a5482a-9a3f-4642-9e62-4ff473312d22 (Tunnel_Id)
+            	credentials-file: /home/vinit/.cloudflared/c0a5482a-9a3f-4642-9e62-4ff473312d22.json
+		ingress:
+  		- hostname: n8n.vinitngr.xyz
+   		  service: http://localhost:5678
+  		- service: http_status:404
+ -> cloudflared tunnel run --config .cloudflared/config.yml --protocol (quic or http2) n8n_tunnel 
+ -> Quic short command - cloudflared tunnel run <tunnelName/>
+ -> Add DNS Record -> n8n | tunnelId.cfargotunnel.com | orange Cloud
+Type: CNAME
+Name: subdomain (e.g., www or app)
+Target: <Tunnel_Id>.cfargotunnel.com  (the one Cloudflare gave you)
+Proxy: Enabled (orange cloud in Cloudflare)
+
+Feature	trycloudflare.com	cfargotunnel.com
+Purpose	Temporary public URL for testing your tunnel	Official CNAME target for connecting your own domain via Cloudflare Tunnel
+Usage	Quick access, no DNS changes needed	Used in DNS CNAME records to point a subdomain to your tunnel
+Lifetime	Short-lived, for testing/demo	Persistent, for production/custom domains
+Example	abcd1234.trycloudflare.com	abcd1234.cfargotunnel.com
+
+other command -
+-> cloudflared tunnel list (get all tunnels)
+-> --config flag for config other then that start with config.yml (give path)

@@ -6,6 +6,7 @@ echo "==============setup started=================="
 
 SCRIPT_DIR="$(pwd)"
 
+
 install_cloudflared_if_missing() {
   if ! command -v cloudflared &> /dev/null; then
     echo "cloudflared not found. Installing..."
@@ -36,8 +37,6 @@ ensure_logged_in() {
 }
 
 create_tunnel() {
-  
-
   FULL_DOMAIN="${SUBDOMAIN}.${DOMAIN}"
   TUNNEL_NAME="${SUBDOMAIN}_tunnel"
 
@@ -69,6 +68,7 @@ create_tunnel() {
   echo "Credentials file: $CREDS_FILE"
 
   echo "Routing DNS for $FULL_DOMAIN..."
+  echo "cloudflare tunenl route dns $TUNNEL_NAME $FULL_DOMAIN"
   if ! cloudflared tunnel route dns "$TUNNEL_NAME" "$FULL_DOMAIN"; then
     echo "DNS routing failed. Make sure the domain is in Cloudflare and your account has permissions."
     exit 1
@@ -97,22 +97,14 @@ EOF
 
 creatingRunN8n(){
   mkdir -p "$HOME/.cloudflared"
-  TARGET="$HOME/.cloudflared/runN8N.sh"
+  TARGET="$HOME/.cloudflared/run_$TUNNEL_NAME.sh"
  
   cat > "$TARGET" << EOF
 #!/bin/bash
 
 set -e
 
-check_docker() {
-    if ! command -v docker &> /dev/null; then
-        echo "==== Docker not found. Install with:"
-        echo "  sudo apt update && sudo apt install -y docker.io"
-        echo "  sudo systemctl enable --now docker"
-        echo "  sudo usermod -aG docker \$USER  # log out/in afterwards"
-        exit 1
-    fi
-}
+
 
 if uname | grep -iq "linux"; then
     echo "running on WSL | Linux"
@@ -138,28 +130,42 @@ start_docker_if_needed() {
     fi
 }
 
-start_n8n_container() {
-    start_docker_if_needed
+check_docker() {
+    if ! command -v docker &> /dev/null; then
+        echo "==== Docker not found. Install with:"
+        echo "  sudo apt update && sudo apt install -y docker.io"
+        echo "  sudo systemctl enable --now docker"
+        echo "  sudo usermod -aG docker \$USER  # log out/in afterwards"
+        exit 1
+    fi
+}
 
-    if ! docker ps -a --format "{{.Names}}" | grep -wq "n8n"; then
+start_n8n_container() {
+    check_docker
+
+    start_docker_if_needed || { echo "Docker did not start"; return 1; }
+
+    if ! docker ps -a --format "{{.Names}}" | grep -wq "$TUNNEL_NAME"; then
         echo "Running n8n container..."
-        docker run -d -p 5678:5678 \
+        docker run -d -p $LOCAL_PORT:5678 \
           -v n8n_data:/home/node/.n8n \
           -e N8N_TRUST_PROXY="true" \
           -e N8N_HOST="$FULL_DOMAIN" \
-          --name n8n n8nio/n8n
+          -e WEBHOOK_URL="https://$FULL_DOMAIN" \
+          --name $TUNNEL_NAME n8nio/n8n
+
     else
         echo "n8n container already exists, starting..."
-        docker start n8n >/dev/null
+        docker start $TUNNEL_NAME >/dev/null
     fi
 
 
-    docker logs -f n8n 2>/dev/null | awk -v prefix="===== DOCKER ===== " -v max=90 \
+    docker logs -f $TUNNEL_NAME 2>/dev/null | awk -v prefix="===== DOCKER ===== " -v max=90 \
     '{ line = \$0; if (length(line) > max) { line = substr(line,1,max) " ..." } print prefix line }' &
     docker_pid=\$!
 
    echo "Waiting for n8n to be ready..."
-    until curl -s -o /dev/null http://localhost:5678/; do
+    until curl -s -o /dev/null http://localhost:$LOCAL_PORT/; do
         sleep 2
     done
     echo "n8n is ready."
@@ -199,24 +205,25 @@ wait_for_tunnel() {
     fi
 }
 
+docker_pid=""
+tunnel_pid=""
 
 cleanup() {
     echo "Exiting script..."
-    kill \$docker_pid 2>/dev/null
-    echo "Stopping tunnel... $tunnel_pid" 
-    kill \$tunnel_pid 2>/dev/null
-    echo "Stopping n8n container... "
-    docker stop n8n >/dev/null 2>&1
+    if [ -n "$docker_pid" ]; then kill $docker_pid 2>/dev/null; fi
+    if [ -n "$tunnel_pid" ]; then kill $tunnel_pid 2>/dev/null; fi
+    echo "Stopping n8n container..."
+    docker stop $TUNNEL_NAME >/dev/null 2>&1
     exit 0
 }
 
+trap cleanup SIGINT SIGTERM
 # ------------Main Script------------------
-check_docker
+# check_docker
 start_n8n_container
 start_cloudflared_tunnel
 wait_for_tunnel
 
-trap cleanup SIGINT SIGTERM
 # -----------------------------------------
 
 while true; do
@@ -229,13 +236,16 @@ EOF
 
   chmod +x "$TARGET"
   echo "Created $TARGET (executable)."
+
+  echo "alias run_$TUNNEL_NAME='$TARGET'" >> ~/.bashrc
+  source ~/.bashrc
 }
 
 debug_variables() {
   echo "===== DEBUG VARIABLES ====="
   echo "SCRIPT_DIR: $SCRIPT_DIR"
   echo "SUBDOMAIN: $SUBDOMAIN"
-  echo "DOMAIN: $DOMAIN"
+  echo "Zone: $DOMAIN"
   echo "FULL_DOMAIN: $FULL_DOMAIN"
   echo "LOCAL_PORT: $LOCAL_PORT"
   echo "TUNNEL_NAME: $TUNNEL_NAME"
@@ -243,7 +253,6 @@ debug_variables() {
   echo "CREDS_FILE: $CREDS_FILE"
   echo "CONFIG_PATH: $CONFIG_PATH"
   echo "TARGET: $TARGET"
-  echo "==========================="
 }
 
 get_user_input() {
@@ -264,7 +273,7 @@ get_user_input() {
     SUBDOMAIN=${SUBDOMAIN:-n8n}
 
     while [ -z "$DOMAIN" ]; do
-        read -r -p "Enter your domain: " DOMAIN
+        read -r -p "Enter your domain/Zone: (example.com) " DOMAIN
     done
 
     [ -z "$LOCAL_PORT" ] && read -r -p "Enter local service port (default: 5678): " LOCAL_PORT
@@ -281,4 +290,4 @@ debug_variables
 
 
 echo "==============setup completed=================="
-echo "Setup complete ✅. Run '$TARGET' to start n8n with the tunnel."
+echo "Setup complete ✅. Run '$TARGET' or 'run_$TUNNEL_NAME' to start n8n with the tunnel."

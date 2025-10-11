@@ -60,6 +60,7 @@ start_n8n_container() {
           -v n8n_data:/home/node/.n8n \
           -e N8N_TRUST_PROXY="true" \
           -e N8N_HOST="n8n.vinitngr.xyz" \
+          -e WEBHOOK_URL="https://n8n.vinitngr.xyz" \
           --name n8n n8nio/n8n
     else
         echo "n8n container already exists, starting..."
