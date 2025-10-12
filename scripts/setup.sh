@@ -8,21 +8,40 @@ SCRIPT_DIR="$(pwd)"
 
 
 install_cloudflared_if_missing() {
-  if ! command -v cloudflared &> /dev/null; then
-    echo "cloudflared not found. Installing..."
-    TMP_BIN="$(mktemp)"
-    curl -fsSL "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64" -o "$TMP_BIN"
-    chmod +x "$TMP_BIN"
-    if mv "$TMP_BIN" /usr/local/bin/cloudflared 2>/dev/null; then
-      echo "Installed to /usr/local/bin/cloudflared"
-    else
-      echo "Installing to $SCRIPT_DIR/cloudflared (no sudo)" 
-      mv "$TMP_BIN" "$SCRIPT_DIR/cloudflared"
-      chmod +x "$SCRIPT_DIR/cloudflared"
-      export PATH="$SCRIPT_DIR:$PATH"
-      echo "Added $SCRIPT_DIR to PATH for this session."
-    fi
+  if command -v cloudflared &>/dev/null; then
+    return 0
   fi
+
+  echo "cloudflared not found. Installing..."
+
+  TMP_BIN="$(mktemp)" || { echo "mktemp failed"; return 1; }
+
+  trap 'rm -f "$TMP_BIN"' EXIT
+
+  if ! curl -fsSL "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64" -o "$TMP_BIN"; then
+    echo "Download failed"
+    return 1
+  fi
+
+  chmod +x "$TMP_BIN"
+
+  if mv "$TMP_BIN" /usr/local/bin/cloudflared 2>/dev/null; then
+    echo "Installed to /usr/local/bin/cloudflared"
+    trap - EXIT 
+    return 0
+  fi
+
+  echo "Installing to $SCRIPT_DIR/cloudflared (no sudo)"
+  if mv "$TMP_BIN" "$SCRIPT_DIR/cloudflared"; then
+    chmod +x "$SCRIPT_DIR/cloudflared"
+    export PATH="$SCRIPT_DIR:$PATH"
+    echo "Added $SCRIPT_DIR to PATH for this session."
+    trap - EXIT
+    return 0
+  fi
+
+  echo "Failed to move cloudflared to destination"
+  return 1
 }
 
 ensure_logged_in() {
@@ -71,6 +90,12 @@ create_tunnel() {
   echo "cloudflare tunenl route dns $TUNNEL_NAME $FULL_DOMAIN"
   if ! cloudflared tunnel route dns "$TUNNEL_NAME" "$FULL_DOMAIN"; then
     echo "DNS routing failed. Make sure the domain is in Cloudflare and your account has permissions."
+    if cloudflared tunnel delete "$TUNNEL_NAME" >/dev/null 2>&1; then
+      echo "Deleted tunnel $TUNNEL_NAME."
+      rm -f "$CREDS_FILE" 2>/dev/null
+    else
+      echo "Failed to delete tunnel $TUNNEL_NAME. | DELETE IT MANUALLY"
+    fi
     exit 1
   fi
 
@@ -122,7 +147,7 @@ start_docker_if_needed() {
         nohup "\$DOCKER_DESKTOP" >/dev/null 2>&1 &
         disown
         
-        echo "==== EVENT ==== Waiting for Docker daemon..."
+        echo "===== EVENT ===== Waiting for Docker daemon..."
         while ! docker info >/dev/null 2>&1; do
             sleep 2
         done
